@@ -1,0 +1,13 @@
+
+Warning: Password is found in an insecure cqlshrc file. The file is owned or readable by other users on the system.
+Notice: Credentials in the cqlshrc file is deprecated and will be ignored in the future.
+Please use a credentials file to specify the username and password.
+
+Connected to [0;1;34mTest Cluster[0m at 192.168.1.94:9042
+[cqlsh 6.1.0 | Cassandra 4.1.3 | CQL spec 3.4.6 | Native protocol v5]
+Use HELP for help.
+jloen@cqlsh> 
+jloen@cqlsh> 
+jloen@cqlsh> 
+jloen@cqlsh> 
+jloen@cqlsh> 
