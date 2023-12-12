@@ -7,3 +7,8 @@ Una agencia de viajes necesita un sistema de gestión eficiente para manejar su 
 > Imagen->`docker pull jloen/cassandrasinf:2`
 > 
 > Credenciales->[properties](src/main/resources/cassandra-config.properties)
+
+> [!note]
+> - **Los nombres y correos de los clientes son generados mediante una función de la librería JavaFaker.**
+>  
+> - **Los nombres de los clientes, destinos, descripción de los destinos, paquetes, países y climas proceden del archivo src/main/resources/data/bd.txt**
