@@ -40,12 +40,8 @@ public class Main {
         // Crear el controlador de Cassandra
         CassandraConnector connector = new CassandraConnector();
 
-        // Insertar datos en la base de datos
-//        DataInitializer dataInitializer = new DataInitializer();
-//        dataInitializer.initializeData(connector.getSession(), 50, 100, 500, 200);
-
         // Realizar consultas
-        connector.executeQueries();
+        connector.menuPrincipal();
 
         // Cerrar la sesión
         connector.getSession().close();

@@ -3,6 +3,7 @@ package unex;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,7 +25,8 @@ public class CassandraConnector {
     private static UUID id;
     private static String input = "";
     private static boolean opcionValida = false;
-    int opcion = 0;
+    private static int opcion = 0;
+    private static boolean isAdmin = false;
 
     // Crear un objeto de sesión
     private final CqlSession session;
@@ -76,7 +78,7 @@ public class CassandraConnector {
                 + "pais TEXT, "
                 + "descripcion TEXT, "
                 + "clima TEXT, "
-                + "PRIMARY KEY((destino_id, nombre), pais, clima));");
+                + "PRIMARY KEY((destino_id), nombre, pais, clima));");
 
         // Crear tabla Paquetes
         session.execute("CREATE TABLE IF NOT EXISTS " + cassandraConfig.getKeyspace() + ".paquetes ("
@@ -85,7 +87,7 @@ public class CassandraConnector {
                 + "destino_id UUID, "
                 + "duracion INT, "
                 + "precio DECIMAL, "
-                + "PRIMARY KEY((paquete_id, nombre), destino_id));");
+                + "PRIMARY KEY((paquete_id), nombre, destino_id));");
 
         // Crear tabla Clientes
         session.execute("CREATE TABLE IF NOT EXISTS " + cassandraConfig.getKeyspace() + ".clientes ("
@@ -93,7 +95,7 @@ public class CassandraConnector {
                 + "nombre TEXT, "
                 + "correo_electronico TEXT, "
                 + "telefono TEXT, "
-                + "PRIMARY KEY((cliente_id, nombre, correo_electronico)));");
+                + "PRIMARY KEY((cliente_id), nombre, correo_electronico));");
 
         // Crear tabla Reservas
         session.execute("CREATE TABLE IF NOT EXISTS " + cassandraConfig.getKeyspace() + ".reservas ("
@@ -103,18 +105,224 @@ public class CassandraConnector {
                 + "fecha_inicio DATE, "
                 + "fecha_fin DATE, "
                 + "pagado BOOLEAN, "
-                + "PRIMARY KEY((reserva_id, cliente_id, fecha_inicio, fecha_fin), paquete_id, pagado));");
+                + "PRIMARY KEY((reserva_id), cliente_id, fecha_inicio, fecha_fin, paquete_id, pagado));");
 
     }
 
-    public void executeQueries() {
+    public void menuPrincipal() throws IOException {
 
+        opcionesList = getMenuPrincipal();
+
+        while (true) {
+            System.out.println(ansi().fg(YELLOW).a("╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n" +
+                    ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tMENÚ").reset() + "\n" +
+                    ansi().fg(YELLOW).a("╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╣\n").reset()));
+
+            showOptions(opcionesList);
+
+            boolean opcionValida = false;
+
+            while (!opcionValida) {
+                System.out.print(ansi().fg(YELLOW).a("==>Seleccione una opción: ").reset());
+                // Verificar si la entrada es un número
+                if (in.hasNextInt()) {
+                    opcion = in.nextInt();
+                    opcionValida = true;
+                } else {
+                    // La entrada no es un número
+                    System.out.println(ansi().fg(RED).a("La opcion introducida no es un número.\n").reset());
+                    in.next();
+                }
+            }
+            in.nextLine(); // Consumir la nueva línea después de leer un entero
+
+            switch (opcion) {
+                case 1:
+                    isAdmin = true;
+                    menuAdmin();
+                    break;
+                case 2:
+                    isAdmin = false;
+                    executeQueries();
+                    break;
+                case 3:
+                    salir();
+                    break;
+                default:
+                    System.out.println(ansi().fg(RED).a("Opción no válida. Por favor, seleccione una opción válida.").reset());
+            }
+        }
+    }
+
+    private void menuAdmin() throws IOException {
+        isAdmin = true;
+
+        opcionesList = getMenuAdmin();
+
+        while (true) {
+            // Imprimir las opciones del Set
+            System.out.println(ansi().fg(YELLOW).a("╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n" +
+                    ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tMENÚ ADMIN").reset() + "\n" +
+                    ansi().fg(YELLOW).a("╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╣\n").reset()));
+
+            showOptions(opcionesList);
+
+            boolean opcionValida = false;
+
+            while (!opcionValida) {
+                System.out.print(ansi().fg(YELLOW).a("==>Seleccione una opción: ").reset());
+                // Verificar si la entrada es un número
+                if (in.hasNextInt()) {
+                    opcion = in.nextInt();
+                    opcionValida = true;
+                } else {
+                    // La entrada no es un número
+                    System.out.println(ansi().fg(RED).a("La opcion introducida no es un número.\n").reset());
+                    in.next();
+                }
+            }
+            in.nextLine(); // Consumir la nueva línea después de leer un entero
+
+            switch (opcion) {
+                case 1:
+                    queryExecutor.cargarDatos();
+                    break;
+                case 2:
+                    queryExecutor.limpiarDatos();
+                    break;
+                case 3:
+                    executeQueries();
+                    break;
+                case 4:
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un cliente: ").reset());
+                    input = in.nextLine();
+                    try {
+                        id = UUID.fromString(input);
+                        queryExecutor.eliminarRegistroPorId("clientes",id);
+                    } catch (IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce un Id de un cliente existente\n").reset()));
+                    }
+                    break;
+                case 5:
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un destino: ").reset());
+                    input = in.nextLine();
+                    try {
+                        id = UUID.fromString(input);
+                        queryExecutor.eliminarRegistroPorId("destinos",id);
+                    } catch (IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce un Id de un destino existente\n").reset()));
+                    }
+                    break;
+                case 6:
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un paquete: ").reset());
+                    input = in.nextLine();
+                    try {
+                        id = UUID.fromString(input);
+                        queryExecutor.eliminarRegistroPorId("paquetes",id);
+                    } catch (IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce un Id de un destino existente\n").reset()));
+                    }
+                    break;
+                case 7:
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de una reserva: ").reset());
+                    input = in.nextLine();
+                    try {
+                        id = UUID.fromString(input);
+                        queryExecutor.eliminarRegistroPorId("reservas",id);
+                    } catch (IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce un Id de una reserva existente\n").reset()));
+                    }
+                    break;
+                case 8:
+                    queryExecutor.dropTablasSecundarias();
+                    break;
+                case 9:
+                    menuPrincipal();
+                    break;
+                case 10:
+                    salir();
+                    break;
+                default:
+                    System.out.println(ansi().fg(RED).a("Opción no válida. Por favor, seleccione una opción válida.").reset());
+            }
+        }
+    }
+
+    public void menuCliente() throws IOException {
+        isAdmin = false;
+        opcionesList = getMenuCliente();
+
+        while (true) {
+            System.out.println(ansi().fg(YELLOW).a("╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n" +
+                    ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tMENÚ CLIENTE").reset() + "\n" +
+                    ansi().fg(YELLOW).a("╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╣\n").reset()));
+
+            showOptions(opcionesList);
+
+            boolean opcionValida = false;
+
+            while (!opcionValida) {
+                System.out.print(ansi().fg(YELLOW).a("==>Seleccione una opción: ").reset());
+                // Verificar si la entrada es un número
+                if (in.hasNextInt()) {
+                    opcion = in.nextInt();
+                    opcionValida = true;
+                } else {
+                    // La entrada no es un número
+                    System.out.println(ansi().fg(RED).a("La opcion introducida no es un número.\n").reset());
+                    in.next();
+                }
+            }
+            in.nextLine(); // Consumir la nueva línea después de leer un entero
+
+            switch (opcion) {
+                case 1:
+                    executeQueries();
+                    break;
+                case 2:
+                    consultarDatosCliente(); // Cosultamos los datos del usuario de la máquina junto a los datos de la proipia máquina sobre la que se ejecuta el programa
+                case 3:
+                    menuPrincipal();
+                case 4:
+                    salir();
+                    break;
+                default:
+                    System.out.println(ansi().fg(RED).a("Opción no válida. Por favor, seleccione una opción válida.").reset());
+            }
+        }
+    }
+
+    private void consultarDatosCliente() {
+        System.out.println(ansi().fg(YELLOW).a("╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n" +
+                ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tDatos de cliente").reset() + "\n" +
+                ansi().fg(YELLOW).a("╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╣\n").reset()));
+        String nombreUsuario = System.getProperty("user.name");
+        String directorioUsuario = System.getProperty("user.home");
+
+        System.out.println(ansi().fg(GREEN).a("==>Datos del Usuario:").reset());
+        System.out.println(ansi().fg(GREEN).a("==>Nombre de Usuario: " + nombreUsuario).reset());
+        System.out.println(ansi().fg(GREEN).a("==>Directorio del Usuario: " + directorioUsuario).reset());
+
+        String sistemaOperativo = System.getProperty("os.name");
+        String versionSistemaOperativo = System.getProperty("os.version");
+        String arquitecturaSistema = System.getProperty("os.arch");
+
+        System.out.println(ansi().fg(GREEN).a("==>Datos de la Máquina:").reset());
+        System.out.println(ansi().fg(GREEN).a("==>Sistema Operativo: " + sistemaOperativo).reset());
+        System.out.println(ansi().fg(GREEN).a("==>Versión del Sistema Operativo: " + versionSistemaOperativo).reset());
+        System.out.println(ansi().fg(GREEN).a("==>Arquitectura del Sistema: " + arquitecturaSistema).reset());
+    }
+
+
+    public void executeQueries() throws IOException {
+
+        String clientOrAdmin = isAdmin ? "Admin" : "Cliente";
         opcionesList = getTiposConsultas();
 
         while (true) {
             // Imprimir las opciones
             System.out.println(ansi().fg(YELLOW).a("╔═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n" +
-                    ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tMenú de Opciones").reset() + "\n" +
+                    ansi().fg(BLUE).a("\t\t\t\t\t\t\t\t\tMENÚ DE CONSULTAS: "+clientOrAdmin).reset() + "\n" +
                     ansi().fg(YELLOW).a("╠═══════════════════════════════════════════════════════════════════════════════════════════════════════════════╣\n").reset()));
 
             showOptions(opcionesList);
@@ -146,6 +354,13 @@ public class CassandraConnector {
                     menuConsultasComplejas();
                     break;
                 case 4:
+                    if(isAdmin){
+                        menuAdmin();
+                    }else{
+                        menuCliente();
+                    }
+                    break;
+                case 5:
                     salir();
                     break;
                 default:
@@ -156,7 +371,7 @@ public class CassandraConnector {
 
     }
 
-    private void menuConsultasBasicas() {
+    private void menuConsultasBasicas() throws IOException {
         opcionesList = getConsultasBasicas();
 
         while (true) {
@@ -196,7 +411,7 @@ public class CassandraConnector {
                     queryExecutor.getAllReservas();
                     break;
                 case 5:
-                    System.out.print("==>Introduce el Id de un paquete: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un paquete: ").reset());
                     input = in.nextLine();
                     try {
                         id = UUID.fromString(input);
@@ -206,7 +421,7 @@ public class CassandraConnector {
                     }
                     break;
                 case 6:
-                    System.out.print("==>Introduce el Id de un cliente: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un cliente: ").reset());
                     input = in.nextLine();
                     try {
                         id = UUID.fromString(input);
@@ -216,7 +431,7 @@ public class CassandraConnector {
                     }
                     break;
                 case 7:
-                    System.out.print("==>Introduce el Id de un destino: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el Id de un destino: ").reset());
                     input = in.nextLine();
                     try {
                         id = UUID.fromString(input);
@@ -252,7 +467,7 @@ public class CassandraConnector {
         }
     }
 
-    private void menuConsultasAvanzadas(){
+    private void menuConsultasAvanzadas() throws IOException {
         opcionesList = getConsultasAvanzadas();
 
         while (true) {
@@ -281,9 +496,13 @@ public class CassandraConnector {
             switch (opcion) {
                 case 1:
                     queryExecutor.createIndexForPaquetesByName();
-                    System.out.print("==>Introduce un nombre de paquete: ");
-                    input = in.nextLine();
-                    queryExecutor.getPaquetesForName(input);
+                    try {
+                        System.out.print(ansi().fg(BLUE).a("==>Introduce un nombre de un paquete: ").reset());
+                        input = in.nextLine();
+                        queryExecutor.getPaquetesForName(input);
+                    }catch(IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce un nombre de un paquete existente\n").reset()));
+                    }
                     break;
                 case 2:
                     queryExecutor.createResumenReservasPorPaqueteTable();
@@ -291,13 +510,17 @@ public class CassandraConnector {
                     queryExecutor.getResumenReservasPorPaqueteTable();
                     break;
                 case 3:
-                    System.out.print("==>Introduce el clima de un destino: ");
-                    input = in.nextLine();
-                    queryExecutor.getAllClientesByDestinoClima(input);
+                    try {
+                        System.out.print(ansi().fg(BLUE).a("==>Introduce el clima de un destino: ").reset());
+                        input = in.nextLine();
+                        queryExecutor.getAllClientesByDestinoClima(input);
+                    }catch(IllegalArgumentException e) {
+                        System.out.print((ansi().fg(RED).a("Introduce el clima de un destino existente\n").reset()));
+                    }
                     break;
                 case 4:
                     queryExecutor.createIndexForReservasClienteFecha();
-                    System.out.print("==>Introduce el Id de un cliente: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduceel id de un cliente: ").reset());
                     try {
                         input = in.nextLine();
                         id = UUID.fromString(input);
@@ -323,7 +546,7 @@ public class CassandraConnector {
                     break;
                 case 5:
                     queryExecutor.createIndiceDestinosPorPaisTable();
-                    System.out.print("==>Introduce el pais: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce un pais: ").reset());
                     try {
                         input = in.nextLine();
                         queryExecutor.insertDestinosPorPais(input);
@@ -343,7 +566,7 @@ public class CassandraConnector {
         }
     }
 
-    private void menuConsultasComplejas() {
+    private void menuConsultasComplejas() throws IOException {
         opcionesList = getConsultasComplejas();
 
         while (true) {
@@ -378,7 +601,7 @@ public class CassandraConnector {
                 case 2:
                     queryExecutor.createIndiceClientesPorCorreoTable();
 
-                    System.out.print("==>Introduce el correo: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce un correo: ").reset());
                     try {
                         input = in.nextLine();
                         queryExecutor.insertClientesPorCorreo(input);
@@ -393,25 +616,25 @@ public class CassandraConnector {
                     queryExecutor.mostrarTablaDisponibilidadPaquetes();
                     break;
                 case 4:
-                    System.out.print("==>Introduce el Id de un destino: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el id de un destino: ").reset());
                     input = in.nextLine();
-                    System.out.print("==>Introduce la duración del paquete: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce la duración del paquete: ").reset());
                     int duracion = in.nextInt();
                     in.nextLine(); // Consumir la nueva línea después de leer un entero
                     try {
                         id = UUID.fromString(input);
                         queryExecutor.getPaquetesPorDestinoYDuracion(id, duracion);
                     } catch (IllegalArgumentException e) {
-                        System.out.print((ansi().fg(RED).a("Introduce un Id de un destino existente\n").reset()));
+                        System.out.print((ansi().fg(RED).a("Introduce un Id y la duración de un destino existentes\n").reset()));
                     }
 
                     break;
                 case 5:
-                    System.out.print("==>Introduce el id de un cliente: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el id de un cliente: ").reset());
                     input = in.nextLine();
-                    System.out.print("==>Introduce el Id de un destino: ");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el id de un destino: ").reset());
                     String idD = in.nextLine();
-                    System.out.print("==>Introduce el estado de pago del destino (1 o 0):\n0->NO Pagado\n1->Pagado");
+                    System.out.print(ansi().fg(BLUE).a("==>Introduce el estado de pago del destino (1 o 0):\n").fg(RED).a("0->NO Pagado\n").fg(BLUE).a("1->Pagado").reset());
                     int pagado = in.nextInt();
                     in.nextLine(); // Consumir la nueva línea después de leer un entero
                     try {
@@ -439,6 +662,7 @@ public class CassandraConnector {
         opcionesList.add("CONSULTAS BÁSICAS.");
         opcionesList.add("CONSULTAS AVANZADAS CON INDEXACIÓN.");
         opcionesList.add("CONSULTAS COMPLEJAS CON INDEXACIÓN");
+        opcionesList.add("Volver");
         opcionesList.add("Salir");
 
         return opcionesList;
@@ -488,11 +712,45 @@ public class CassandraConnector {
         return opcionesList;
     }
 
+    public static List<String> getMenuAdmin() {
+        opcionesList = new ArrayList<>();
+        opcionesList.add("Introducir registros a la Base de Datos.");
+        opcionesList.add("Limpiar Base de Datos.");
+        opcionesList.add("Consultar datos.");
+        opcionesList.add("Eliminar cliente por ID.");
+        opcionesList.add("Eliminar destino por ID.");
+        opcionesList.add("Eliminar paquete por ID.");
+        opcionesList.add("Eliminar reserva por ID");
+        opcionesList.add("Eliminar Tablas secundarias.");
+        opcionesList.add("Volver");
+        opcionesList.add("Salir");
 
-    // Función para solicitar una fecha usando JOptionPane
+        return opcionesList;
+    }
+
+    public static List<String> getMenuPrincipal() {
+        opcionesList = new ArrayList<>();
+        opcionesList.add("Admin.");
+        opcionesList.add("Cliente.");
+        opcionesList.add("Salir");
+
+        return opcionesList;
+    }
+
+    public static List<String> getMenuCliente() {
+        opcionesList = new ArrayList<>();
+        opcionesList.add("Consultar datos.");
+        opcionesList.add("Consultar datos de cliente.");
+        opcionesList.add("Volver");
+        opcionesList.add("Salir");
+
+        return opcionesList;
+    }
+
+
     private static LocalDate solicitarFecha(String mensaje) {
         do {
-            System.out.print(mensaje);
+            System.out.print(ansi().fg(BLUE).a(mensaje).reset());
             String fechaString = in.nextLine();
             try {
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");

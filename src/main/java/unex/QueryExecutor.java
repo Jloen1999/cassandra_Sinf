@@ -1,11 +1,16 @@
 package unex;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DriverTimeoutException;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
+import com.datastax.oss.driver.api.core.servererrors.InvalidQueryException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -189,7 +194,7 @@ public class QueryExecutor {
 
 
     public void getPaquetesByDestino(UUID destinoId) {
-        rs = session.execute("SELECT * FROM  " + cassandraConfig.getKeyspace() + ".paquetes WHERE destino_id = ?", destinoId);
+        rs = session.execute("SELECT * FROM  " + cassandraConfig.getKeyspace() + ".paquetes WHERE destino_id = ? ALLOW FILTERING", destinoId);
 
         System.out.println(ansi().fg(YELLOW).a("\t\t\t\t\t+--------------------------------------+").reset());
         System.out.println(ansi().fg(YELLOW).a("\t\t\t\t\t|           Detalles del Paquete            |").reset());
@@ -264,7 +269,7 @@ public class QueryExecutor {
     }
 
     public void getResumenReservasPorPaqueteTable() {
-        rs = session.execute("SELECT * FROM " + cassandraConfig.getKeyspace() + ".resumen_reservas_por_paquete;");
+        rs = session.execute("SELECT * FROM " + cassandraConfig.getKeyspace() + ".resumen_reservas_por_paquete");
         System.out.println(ansi().fg(YELLOW).a("\t\t\t\t\t+--------------------------------------+").reset());
         System.out.println(ansi().fg(YELLOW).a("\t\t\t\t\t| Resumen Total de Reservas por paquete |").reset());
         System.out.println(ansi().fg(YELLOW).a("\t\t\t\t\t+--------------------------------------+").reset());
@@ -736,13 +741,159 @@ public class QueryExecutor {
         }
 
         if (!existClient) {
-            System.out.println(ansi().fg(RED).a("No existe el cliente").reset());
+            System.out.println(ansi().fg(RED).a("==>No existe el cliente").reset());
         }
 
         if (!existDestin) {
-            System.out.println(ansi().fg(RED).a("No existe el destino").reset());
+            System.out.println(ansi().fg(RED).a("==>No existe el destino").reset());
         }
 
+    }
+
+    // Eliminar base de datos si existe
+    public void limpiarDatos() {
+        String keyspace = cassandraConfig.getKeyspace();
+        if(existKeyspace(keyspace)) {
+            truncateTable("destinos");
+            truncateTable("clientes");
+            truncateTable("paquetes");
+            truncateTable("reservas");
+            truncateTable("destinos_populares");
+            truncateTable("destinos_por_pais");
+            truncateTable("disponibilidad_paquetes");
+            truncateTable("resumen_reservas_por_paquete");
+            truncateTable("clientes_por_correo");
+        } else {
+            System.out.println(ansi().fg(RED).a("==>El Keyspace " + keyspace + " no existe.").reset());
+        }
+
+    }
+
+    public void truncateTable(String tableName) {
+        if(existeTabla(tableName)){
+            String truncateQuery = String.format("TRUNCATE %s.%s;", cassandraConfig.getKeyspace(), tableName);
+            // Ejecutar la consulta de truncado
+            session.execute(truncateQuery);
+            System.out.println(ansi().fg(GREEN).a("==>Datos de la tabla " + tableName + " en el Keyspace " + cassandraConfig.getKeyspace() + " eliminados.").reset());
+        }
+    }
+
+    // Verificar si existe el keyspace
+    public boolean existKeyspace(String keyspace) {
+        List<Row> result = session.execute("SELECT keyspace_name FROM system_schema.keyspaces WHERE keyspace_name = ?", keyspace).all();
+        return !result.isEmpty();
+    }
+
+    public void cargarDatos() throws IOException {
+        // Insertar datos en la base de datos
+        DataInitializer dataInitializer = new DataInitializer();
+        dataInitializer.initializeData(session, 50, 100, 500, 200);
+    }
+
+    // Eliminar registro por ID en Cassandra
+    public void eliminarRegistroPorId(String nameTable, UUID id) {
+        if (existeTabla(nameTable)) {
+            String deleteQuery = "";
+            PreparedStatement preparedStatement = null;
+            ResultSet rs = null;
+                switch (nameTable) {
+                    case "clientes":
+                        // Preparar la sentencia DELETE según la colección
+                        deleteQuery = "DELETE FROM " + cassandraConfig.getKeyspace() + "." + nameTable + " WHERE cliente_id = ?";
+                        preparedStatement = session.prepare(deleteQuery);
+
+                        // Ejecutar la sentencia DELETE con el ID
+                         rs = session.execute(preparedStatement.bind(id));
+                        if(rs.one() == null){
+                            System.out.println(ansi().fg(GREEN).a("\t\t\t\t\t| Cliente " + id + " eliminado correctamente").reset());
+                        }else{
+                            System.out.println(ansi().fg(RED).a("\t\t\t\t\t| No existe un cliente con el id: " + id).reset());
+                        }
+
+                        break;
+
+                    case "destinos":
+                        // Preparar la sentencia DELETE según la colección
+                        deleteQuery = "DELETE FROM " + cassandraConfig.getKeyspace() + "." + nameTable + " WHERE destino_id = ?";
+                        preparedStatement = session.prepare(deleteQuery);
+
+                        // Ejecutar la sentencia DELETE con el ID
+                        rs = session.execute(preparedStatement.bind(id));
+                        if(rs.one() != null){
+                            System.out.println(ansi().fg(GREEN).a("\t\t\t\t\t| Destino " + id + " eliminado correctamente").reset());
+                        }else{
+                            System.out.println(ansi().fg(RED).a("\t\t\t\t\t| No existe un destino con el id: " + id).reset());
+                        }
+                        break;
+
+                    case "paquetes":
+                        // Preparar la sentencia DELETE según la colección
+                        deleteQuery = "DELETE FROM " + cassandraConfig.getKeyspace() + "." + nameTable + " WHERE paquete_id = ?";
+                        preparedStatement = session.prepare(deleteQuery);
+
+                        rs = session.execute(preparedStatement.bind(id));
+                        if(rs.one() != null){
+                            System.out.println(ansi().fg(GREEN).a("\t\t\t\t\t| Paquete " + id + " eliminado correctamente").reset());
+                        }else{
+                            System.out.println(ansi().fg(RED).a("\t\t\t\t\t| No existe un paquete con el id: " + id).reset());
+                        }
+                        break;
+
+                    case "reservas":
+                        // Preparar la sentencia DELETE según la colección
+                        deleteQuery = "DELETE FROM " + cassandraConfig.getKeyspace() + "." + nameTable + " WHERE reserva_id = ?";
+                        preparedStatement = session.prepare(deleteQuery);
+
+                        // Ejecutar la sentencia DELETE con el ID
+                        rs = session.execute(preparedStatement.bind(id));
+                        if(rs.one() != null){
+                            System.out.println(ansi().fg(GREEN).a("\t\t\t\t\t| Reserva " + id + " eliminado correctamente").reset());
+                        }else{
+                            System.out.println(ansi().fg(RED).a("\t\t\t\t\t| No existe una reserva con el id: " + id).reset());
+                        }
+                        break;
+
+                    default:
+                        System.err.println(ansi().fg(RED).a("==>Error, NO existe una tabla: " + nameTable + " con el id " + id).reset());
+                        break;
+                }
+
+
+        } else {
+            System.err.println(ansi().fg(RED).a("Error, NO existe la tabla: " + nameTable).reset());
+        }
+    }
+
+
+    public void dropTablasSecundarias() {
+        dropTableIfExists("destinos_populares");
+        dropTableIfExists("destinos_por_pais");
+        dropTableIfExists("disponibilidad_paquetes");
+        dropTableIfExists("resumen_reservas_por_paquete");
+        dropTableIfExists("clientes_por_correo");
+    }
+
+    // Eliminar tabla si existe
+    public void dropTableIfExists(String nameTable) {
+
+        if (existeTabla(nameTable)) {
+            // Ejecutar la instrucción CQL para eliminar la tabla
+            try {
+                session.execute(SimpleStatement.newInstance("DROP TABLE IF EXISTS " + nameTable));
+                System.out.println(ansi().fg(GREEN).a("==>Tabla '" + nameTable + "' eliminada exitosamente.").reset());
+            } catch (DriverTimeoutException e) {
+                System.err.println(ansi().fg(GREEN).a("==>Tabla '" + nameTable + "' eliminada exitosamente.").reset());
+            }
+        } else {
+            System.out.println(ansi().fg(RED).a("La tabla '" + nameTable + "' no existe.").reset());
+        }
+
+    }
+
+    // Verificar si existe la tabla
+    public boolean existeTabla(String nameTable) {
+        List<Row> result = session.execute("SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? AND table_name = ?", cassandraConfig.getKeyspace(), nameTable).all();
+        return !result.isEmpty();
     }
 
 
