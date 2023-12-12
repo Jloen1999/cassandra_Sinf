@@ -4,4 +4,5 @@ Una agencia de viajes necesita un sistema de gestión eficiente para manejar su 
 
 > [!important]
 > Imagen->`docker pull jloen/cassandrasinf:2`
-> Credenciales->
+> 
+> Credenciales->[properties](src/main/resources/cassandra-config.properties)
